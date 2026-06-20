@@ -6,10 +6,8 @@ name: CI — Vite React
 on:
   push:
     branches: [main, dev]
-    # Trigger on pushes to main OR dev branch
   pull_request:
     branches: [main]
-    # Block merges to main until this workflow passes
 
 # ──────────────────────────────────────────────────────────
 # CONCURRENCY: If a new push arrives while this workflow is
@@ -22,13 +20,12 @@ concurrency:
 
 permissions:
   contents: read
-  # Read-only: this workflow never writes back to the repo
 
 jobs:
 
   # ──────────────────────────────────────────────────────────
   # JOB 1 — QUALITY
-  # Lint the code. Fast check — catches mistakes before build.
+  # Lint and security audit. Fails fast before wasting time.
   # ──────────────────────────────────────────────────────────
   quality:
     name: 🔍 Lint & Security
@@ -37,46 +34,38 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        # Downloads your repo onto the runner machine
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-        # Installs Node 22 + caches node_modules between runs
 
       - name: Install dependencies
-        run: npm install --prefer-offline
-        # npm install (not npm ci) is used here because this project uses
-        # packages with optional native binaries (e.g. @napi-rs/wasm-runtime)
-        # whose peer deps differ between Windows (dev) and Linux (CI).
-        # npm install resolves this gracefully; npm ci would fail.
-        # --prefer-offline = use local cache first, minimise network calls.
+        run: npm ci
+        # Industry standard: strict, reproducible install from package-lock.json.
+        # Works correctly because package-lock.json was regenerated with
+        # --include=optional, so all platform-specific peer deps are included.
 
       - name: ESLint
         run: npm run lint
-        # Checks for code quality issues (unused vars, bad hooks, etc.)
-        # Zero tolerance — any lint error fails this job
 
       - name: Security Audit
         run: npm audit --audit-level=high
-        # Scans all packages against the CVE vulnerability database
-        # Only fails for HIGH or CRITICAL severity issues
+        # Only fails for HIGH or CRITICAL severity CVEs
 
 
   # ──────────────────────────────────────────────────────────
   # JOB 2 — BUILD
-  # Runs ONLY if quality passed. Verifies the app compiles
-  # cleanly for production. Saves the /dist as an artifact
-  # so the CD job can download it instead of rebuilding.
+  # Runs ONLY after quality passes. Verifies production build.
+  # Uploads /dist artifact for the CD job to reuse.
   # ──────────────────────────────────────────────────────────
   build:
     name: 🏗️ Vite Build
     runs-on: ubuntu-latest
     needs: quality
-    # ↑ CHAIN: this job will NOT start until "quality" succeeds.
-    # If quality fails → build is SKIPPED → CD never runs.
+    # ↑ CHAIN: will NOT start until "quality" succeeds.
+    # quality fails → build is SKIPPED → CD never runs.
 
     steps:
       - name: Checkout code
@@ -88,28 +77,24 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Cache Vite intermediate build files
+      - name: Cache Vite build files
         uses: actions/cache@v4
         with:
           path: node_modules/.vite
           key: ${{ runner.os }}-vite-${{ hashFiles('src/**', 'vite.config.js') }}
-          # Cache key changes when any src file or vite config changes
           restore-keys: ${{ runner.os }}-vite-
 
       - name: Install dependencies
-        run: npm install --prefer-offline
-        # Consistent with the quality job above
+        run: npm ci
 
       - name: Build for production
         run: npm run build
         env:
           NODE_ENV: production
-          # Enables all production optimisations in Vite
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: vite-dist
           path: dist/
-          # CD job downloads this — no need to rebuild twice
           retention-days: 1
