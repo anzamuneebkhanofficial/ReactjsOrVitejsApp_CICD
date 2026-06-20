@@ -110,6 +110,6 @@ jobs:
 # ──────────────────────────────────────────────────────────
   call-deployment:
     needs: build
-    uses: ./.github/workflows/cd-netlify.yml
+    uses: ./.github/workflows/cd-cloudflare.yml
     # Change 'cd-vercel.yml' to whatever file you want to run!
     secrets: inherit

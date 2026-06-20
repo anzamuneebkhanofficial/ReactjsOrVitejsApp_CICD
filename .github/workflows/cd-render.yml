@@ -1,0 +1,14 @@
+name: CD — Render
+
+on:
+  workflow_call:
+
+jobs:
+  deploy:
+    name: 🚀 Trigger Render Deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger Deploy Hook
+        # This simple curl command pings Render to pull the latest code and build
+        run: curl ${{ secrets.RENDER_DEPLOY_HOOK }}

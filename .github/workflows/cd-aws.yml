@@ -1,0 +1,73 @@
+name: CD — AWS S3 + CloudFront (Vite React)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to AWS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          # If your app calls an external API, provide the URL here
+          # VITE_ prefix = Vite bakes this into the JS bundle
+          # Browser can see VITE_ variables — never put secrets here
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        # Official AWS action — authenticates your CLI with AWS
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          # These three = your AWS identity
+          # After this step: all AWS CLI commands are authenticated
+
+      - name: Upload to S3
+        run: |
+          aws s3 sync dist/ s3://${{ secrets.S3_BUCKET_NAME }} \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable"
+        # aws s3 sync = upload /dist folder to S3 bucket
+        # s3://bucket-name = destination
+        # --delete = remove files in S3 that don't exist in /dist
+        #   Without this: old files pile up forever in S3
+        #   With this: S3 always matches your current /dist exactly
+        # --cache-control "max-age=31536000, immutable"
+        #   = tell browsers: cache these files for 1 YEAR
+        #   31536000 seconds = 365 days
+        #   "immutable" = file will never change (safe because
+        #   Vite adds content hash to every filename: App.abc123.js)
+        #   When you deploy new code: App.xyz789.js (different name)
+        #   Browser sees new filename → fetches fresh → no stale cache
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+        # Problem: CloudFront caches files on its 400+ servers worldwide
+        # After uploading to S3: CloudFront still serves OLD files
+        # Solution: Invalidation = tell ALL CloudFront servers:
+        #   "throw away your cache, fetch fresh from S3"
+        # --paths "/*" = invalidate ALL files (* = everything)
+        # After this: users worldwide get your new code immediately

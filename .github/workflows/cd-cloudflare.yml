@@ -1,0 +1,31 @@
+name: CD — Cloudflare Pages
+
+on:
+  workflow_call:
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Cloudflare
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: vite-dist
+          path: dist/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.run_id }}
+          # We use github.run_id here because this workflow was called directly by the CI
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: 'your-cloudflare-project-name' # CHANGE THIS to match the name you created in setup
+          directory: 'dist'
+          branch: main

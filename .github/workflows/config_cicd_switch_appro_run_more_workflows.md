@@ -1,0 +1,1 @@
+How do we manage a single Continuous Integration (CI) pipeline that can conditionally trigger multiple, separate Continuous Deployment (CD) workflows for different platforms like Vercel or AWS?
