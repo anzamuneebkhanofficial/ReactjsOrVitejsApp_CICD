@@ -16,10 +16,10 @@ function App() {
           <img src={viteLogo} className="vite" alt="Vite logo" />
         </div>
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save 400000 77777777777 to test <code>HMR</code>
-          </p>
+          <h1>Get started netlify
+            <p>
+              Edit <code>src/App.jsx</code> and save 400000 77777777777 to test <code>HMR</code>
+            </p>
         </div>
         <button
           type="button"

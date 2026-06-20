@@ -1,0 +1,55 @@
+name: CD — Netlify (Vite React)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Netlify
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          # Built-in npm caching enabled
+
+      - name: Install dependencies
+        run: npm ci
+        # "Clean Install" - strictly uses package-lock.json
+
+      - name: Build
+        run: npm run build
+        # Runs the "build" script from your package.json
+        env:
+          NODE_ENV: production
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3
+        # Community action that wraps Netlify CLI
+        # Saves you from writing complex curl commands
+        with:
+          publish-dir: ./dist
+          # Tell Netlify: serve files from /dist folder
+          # Vite outputs to /dist — this is correct
+          production-branch: main
+          # Only THIS branch = production deploy (not preview URL)
+          production-deploy: true
+          # true = deploy to your main domain
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN = auto-created by GitHub for EVERY workflow
+          # You do NOT add this to secrets — it just exists
+          # Used to post deployment status back to your PR
+          deploy-message: "Deploy ${{ github.sha }}"
+          # A label in Netlify dashboard showing what was deployed
+          # github.sha = your commit ID (e.g. a3f9c2b1...)
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
