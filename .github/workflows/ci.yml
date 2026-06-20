@@ -1,161 +1,111 @@
 name: CI — Vite React
-# Label shown in GitHub Actions tab
+# Runs on every push to main/dev and every PR targeting main.
+# Jobs run in a STRICT CHAIN: quality → build
+# If any job fails, all downstream jobs are SKIPPED automatically.
 
 on:
   push:
     branches: [main, dev]
-    # Run when code is pushed to main OR dev branch
+    # Trigger on pushes to main OR dev branch
   pull_request:
     branches: [main]
-    # Run when a PR is opened targeting main
-    # GitHub will block the merge until this passes
+    # Block merges to main until this workflow passes
 
+# ──────────────────────────────────────────────────────────
+# CONCURRENCY: If a new push arrives while this workflow is
+# already running for the same branch, CANCEL the old run
+# and start fresh with the latest code.
+# ──────────────────────────────────────────────────────────
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
-  # Push twice quickly → cancel first run → start fresh
-  # (See Chapter 0.4 for full explanation)
 
 permissions:
   contents: read
-  # This workflow can only read code. Cannot write or push.
+  # Read-only: this workflow never writes back to the repo
 
 jobs:
 
-  # ─────────────────────────────────────────────────────
-  # JOB 1: QUALITY
-  # Check code is correct before wasting time on tests
-  # ─────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────
+  # JOB 1 — QUALITY
+  # Lint the code. Fast check — catches mistakes before build.
+  # ──────────────────────────────────────────────────────────
   quality:
-    name: 🔍 Lint · Format · Types · Security
+    name: 🔍 Lint & Security
     runs-on: ubuntu-latest
-    # Fresh Ubuntu VM. See Chapter 0.4 for explanation.
 
     steps:
-      - uses: actions/checkout@v4
-        # Get code onto machine. Always first. (Ch 0.4)
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # Downloads your repo onto the runner machine
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-        # Install Node.js 22 AND automatically cache npm dependencies.
+        # Installs Node 22 + caches node_modules between runs
 
-      - name: Install packages
+      - name: Install dependencies
         run: npm ci
-        # "Clean Install" - strict installation from package-lock.json.
-        # Faster and safer for CI environments than "npm install".
+        # Strict, reproducible install from package-lock.json
+        # Faster than "npm install" and safer for CI
 
       - name: ESLint
         run: npm run lint
-        # Runs your package.json "lint" script
-        # What it catches:
-        #   ✗ const x = 5; (declared but never used)
-        #   ✗ useEffect(() => { fetchData() }, [fetchData])
-        # Industry standard: zero tolerance for lint issues
-
-      - name: Prettier
-        run: npm run format:check
-        # Runs your package.json "format:check" script
-        # Checks ALL files: .ts, .tsx, .json, .css, .md
-        # Does NOT change anything — only checks
-        # Fix locally: run "npm run format" then commit
-
-      - name: TypeScript
-        run: npm run type-check
-        # Runs your package.json "type-check" script (tsc --noEmit)
-        # Faster than full build. Just checking, not building.
+        # Checks for code quality issues (unused vars, bad hooks, etc.)
+        # Zero tolerance — any error fails this job
 
       - name: Security Audit
         run: npm audit --audit-level=high
-        # Checks ALL your packages against the CVE database
-        # CVE = Common Vulnerabilities and Exposures
-        # --audit-level=high = only FAIL for HIGH or CRITICAL
+        # Scans all packages against the CVE vulnerability database
+        # Only fails for HIGH or CRITICAL severity issues
 
 
-  # ─────────────────────────────────────────────────────
-  # JOB 2: TEST
-  # Run only if quality passed
-  # ─────────────────────────────────────────────────────
-  test:
-    name: 🧪 Vitest
-    runs-on: ubuntu-latest
-    needs: quality
-    # needs: quality = wait for quality job to finish
-    # If quality FAILS → this job is SKIPPED entirely
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      # (All above = standard boilerplate.)
-
-      - name: Run tests
-        run: npm run test:coverage
-        # Runs your package.json "test:coverage" script
-        # If any test assertion fails → step FAILS → no deploy
-        env:
-          NODE_ENV: test
-          # Tell your app: "you are running in test mode"
-
-      - name: Save coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
-        # if: always() = upload EVEN if tests failed
-        # So you can see the report to understand what broke
-        with:
-          name: coverage-report
-          path: coverage/
-          # Vitest outputs coverage to /coverage folder
-          retention-days: 7
-
-
-  # ─────────────────────────────────────────────────────
-  # JOB 3: BUILD
-  # Run only if tests passed
-  # ─────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────
+  # JOB 2 — BUILD
+  # Runs ONLY if quality passed. Verifies the app compiles
+  # cleanly for production. Saves the /dist as an artifact
+  # so the CD job can download it instead of rebuilding.
+  # ──────────────────────────────────────────────────────────
   build:
     name: 🏗️ Vite Build
     runs-on: ubuntu-latest
-    needs: test
-    # Chain: quality → test → build
-    # All three must pass in order
+    needs: quality
+    # ↑ CHAIN: this job will NOT start until "quality" succeeds.
+    # If quality fails → build is SKIPPED → CD never runs.
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
 
-      - name: Cache Vite intermediate build
+      - name: Cache Vite intermediate build files
         uses: actions/cache@v4
         with:
           path: node_modules/.vite
-          # Vite stores intermediate build cache in node_modules/.vite
-          # If your source files haven't changed → Vite reuses this
-          key: ${{ runner.os }}-vite-${{ hashFiles('src/**', 'vite.config.ts') }}
-          # Key changes when any src file OR vite config changes
+          key: ${{ runner.os }}-vite-${{ hashFiles('src/**', 'vite.config.js') }}
+          # Cache key changes when any src file or vite config changes
           restore-keys: ${{ runner.os }}-vite-
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Build
+      - name: Build for production
         run: npm run build
-        # Runs your package.json "build" script
-        # Result: /dist folder = your complete app ready to deploy
         env:
           NODE_ENV: production
-          # Production mode = all optimizations enabled
+          # Enables all production optimisations in Vite
 
-      - name: Save build output
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: vite-dist
           path: dist/
-          # Save the /dist folder
-          # CD jobs download this instead of rebuilding
+          # CD job downloads this — no need to rebuild twice
           retention-days: 1

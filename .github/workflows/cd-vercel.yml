@@ -1,11 +1,25 @@
 name: CD — Vercel (Vite React)
+# Deploys to Vercel ONLY after the CI workflow fully passes.
+# Triggered by workflow_run, not by push — this is the key fix.
+# CD will NEVER run if CI is failing or cancelled.
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI — Vite React"]
+    # ↑ EXACT name of your CI workflow (must match the "name:" field in ci.yml)
     branches: [main]
-    # ONLY deploy when code is pushed to main
-    # Not on dev, not on feature branches
-    # Only production-ready code gets deployed
+    # Only deploy from main branch pushes — never from dev
+    types: [completed]
+    # "completed" fires whether CI passed OR failed.
+    # We filter to only proceed on success below (see the "if:" condition).
+
+# ──────────────────────────────────────────────────────────
+# CONCURRENCY: Cancel any in-progress deploy for this branch
+# if a newer one is queued. Latest push always wins.
+# ──────────────────────────────────────────────────────────
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -15,29 +29,37 @@ jobs:
     name: 🚀 Deploy to Vercel
     runs-on: ubuntu-latest
     environment: production
-    # Links to GitHub Environment "production"
-    # Go to: Repo → Settings → Environments → New → "production"
-    # Optional: add required reviewers here
+    # Links to GitHub Environment named "production"
+    # Set up at: Repo → Settings → Environments → production
+    # You can add required reviewers there for an extra gate
+
+    # ──────────────────────────────────────────────────────
+    # CRITICAL GATE: Only run this job if CI actually passed.
+    # If CI failed or was cancelled → this entire job is SKIPPED.
+    # ──────────────────────────────────────────────────────
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: vite-dist
+          path: dist/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          # Downloads the /dist folder built by CI.
+          # No need to reinstall and rebuild everything from scratch.
 
       - name: Deploy to Vercel
-        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
-        # npx vercel = run Vercel CLI without installing globally
-        # --prod = deploy to PRODUCTION domain (not preview URL)
-        # --token = authenticate with Vercel API
-        # ${{ secrets.VERCEL_TOKEN }} = reads your secret (shows as *** in logs)
-        #
-        # What Vercel does when it receives this:
-        #   1. Receives your code
-        #   2. Runs pnpm install
-        #   3. Runs pnpm build (your script)
-        #   4. Takes the /dist folder
-        #   5. Deploys to their global CDN (200+ edge locations)
-        #   6. Your app is live at your-app.vercel.app
+        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --prebuilt
+        # --prod      = deploy to production domain (not a preview URL)
+        # --token     = authenticate with your Vercel API token
+        # --prebuilt  = skip Vercel's own build step, use our /dist directly
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          # These two tell Vercel CLI: which project to deploy to
-          # Without them: CLI asks interactively → fails in CI (no human)
+          # These tell Vercel CLI which project to deploy to.
+          # Without them the CLI asks interactively → fails in CI.
