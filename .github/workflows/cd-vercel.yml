@@ -1,0 +1,73 @@
+name: CD — Vercel (Vite React)
+# Deploys to Vercel ONLY after the CI workflow fully passes.
+# Triggered by workflow_run, not by push — this is the key fix.
+# CD will NEVER run if CI is failing or cancelled.
+
+on:
+  workflow_call:
+
+# ──────────────────────────────────────────────────────────
+# CONCURRENCY: Cancel any in-progress deploy for this branch
+# if a newer one is queued. Latest push always wins.
+# ──────────────────────────────────────────────────────────
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Vercel
+    runs-on: ubuntu-latest
+    environment: production
+    # Links to GitHub Environment named "production"
+    # Set up at: Repo → Settings → Environments → production
+    # You can add required reviewers there for an extra gate
+
+    # ──────────────────────────────────────────────────────
+    # CRITICAL GATE: Only run this job if CI actually passed.
+    # If CI failed or was cancelled → this entire job is SKIPPED.
+    # ──────────────────────────────────────────────────────
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: vite-dist
+          path: dist/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          # Downloads the /dist folder built by CI.
+          # No need to reinstall and rebuild everything from scratch.
+
+      - name: Format for Vercel Build Output API
+        run: |
+          # The --prebuilt flag requires the Vercel Build Output API format
+          mkdir -p .vercel/output/static
+          cp -r dist/* .vercel/output/static/
+          cat <<EOF > .vercel/output/config.json
+          {
+            "version": 3,
+            "routes": [
+              { "handle": "filesystem" },
+              { "src": "/(.*)", "dest": "/index.html" }
+            ]
+          }
+          EOF
+
+      - name: Deploy to Vercel
+        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --prebuilt
+        # --prod      = deploy to production domain (not a preview URL)
+        # --token     = authenticate with your Vercel API token
+        # --prebuilt  = skip Vercel's own build step, use our generated .vercel/output
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          # These tell Vercel CLI which project to deploy to.
+          # Without them the CLI asks interactively → fails in CI.

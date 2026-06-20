@@ -1,12 +1,7 @@
 name: CD — Netlify (Vite React)
 
 on:
-  workflow_run:
-    workflows: ["CI — Vite React"]
-    types:
-      - completed
-    branches:
-      - main
+  workflow_call:
 
 permissions:
   contents: read

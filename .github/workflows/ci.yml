@@ -104,3 +104,12 @@ jobs:
           name: vite-dist
           path: dist/
           retention-days: 1
+
+# ──────────────────────────────────────────────────────────
+# JOB 3 — CALL DEPLOYMENT
+# ──────────────────────────────────────────────────────────
+  call-deployment:
+    needs: build
+    uses: ./.github/workflows/cd-netlify.yml
+    # Change 'cd-vercel.yml' to whatever file you want to run!
+    secrets: inherit
