@@ -47,14 +47,17 @@ jobs:
         # Installs Node 22 + caches node_modules between runs
 
       - name: Install dependencies
-        run: npm ci
-        # Strict, reproducible install from package-lock.json
-        # Faster than "npm install" and safer for CI
+        run: npm install --prefer-offline
+        # npm install (not npm ci) is used here because this project uses
+        # packages with optional native binaries (e.g. @napi-rs/wasm-runtime)
+        # whose peer deps differ between Windows (dev) and Linux (CI).
+        # npm install resolves this gracefully; npm ci would fail.
+        # --prefer-offline = use local cache first, minimise network calls.
 
       - name: ESLint
         run: npm run lint
         # Checks for code quality issues (unused vars, bad hooks, etc.)
-        # Zero tolerance — any error fails this job
+        # Zero tolerance — any lint error fails this job
 
       - name: Security Audit
         run: npm audit --audit-level=high
@@ -94,7 +97,8 @@ jobs:
           restore-keys: ${{ runner.os }}-vite-
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --prefer-offline
+        # Consistent with the quality job above
 
       - name: Build for production
         run: npm run build
