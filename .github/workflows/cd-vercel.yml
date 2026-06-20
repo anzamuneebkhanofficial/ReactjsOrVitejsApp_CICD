@@ -26,12 +26,6 @@ jobs:
     # Set up at: Repo → Settings → Environments → production
     # You can add required reviewers there for an extra gate
 
-    # ──────────────────────────────────────────────────────
-    # CRITICAL GATE: Only run this job if CI actually passed.
-    # If CI failed or was cancelled → this entire job is SKIPPED.
-    # ──────────────────────────────────────────────────────
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,8 +35,6 @@ jobs:
         with:
           name: vite-dist
           path: dist/
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
           # Downloads the /dist folder built by CI.
           # No need to reinstall and rebuild everything from scratch.
 
