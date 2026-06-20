@@ -8,6 +8,8 @@ jobs:
     name: 🚀 Deploy to Cloudflare
     runs-on: ubuntu-latest
     environment: production
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     
     steps:
       - name: Checkout code
@@ -22,27 +24,10 @@ jobs:
           run-id: ${{ github.run_id }}
           # We use github.run_id here because this workflow was called directly by the CI
 
-      - name: 🔍 Debug - Check setup before deploy
-        run: |
-          echo "Checking if dist directory exists..."
-          ls -la dist/ || echo "dist directory NOT FOUND!"
-          
-          echo "Checking Secrets..."
-          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
-            echo "❌ CLOUDFLARE_API_TOKEN is MISSING or EMPTY!"
-          else
-            echo "✅ CLOUDFLARE_API_TOKEN is set."
-          fi
-          
-          if [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
-            echo "❌ CLOUDFLARE_ACCOUNT_ID is MISSING or EMPTY!"
-          else
-            echo "✅ CLOUDFLARE_ACCOUNT_ID is set."
-          fi
 
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=reactjsorvitejsapp-cicd --branch=main
+          command: pages deploy dist --project-name=reactjsorvitejsapp-cicd --branch=main --commit-dirty=true
