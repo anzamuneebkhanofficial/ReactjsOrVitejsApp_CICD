@@ -53,11 +53,26 @@ jobs:
           # Downloads the /dist folder built by CI.
           # No need to reinstall and rebuild everything from scratch.
 
+      - name: Format for Vercel Build Output API
+        run: |
+          # The --prebuilt flag requires the Vercel Build Output API format
+          mkdir -p .vercel/output/static
+          cp -r dist/* .vercel/output/static/
+          cat <<EOF > .vercel/output/config.json
+          {
+            "version": 3,
+            "routes": [
+              { "handle": "filesystem" },
+              { "src": "/(.*)", "dest": "/index.html" }
+            ]
+          }
+          EOF
+
       - name: Deploy to Vercel
         run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --prebuilt
         # --prod      = deploy to production domain (not a preview URL)
         # --token     = authenticate with your Vercel API token
-        # --prebuilt  = skip Vercel's own build step, use our /dist directly
+        # --prebuilt  = skip Vercel's own build step, use our generated .vercel/output
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
