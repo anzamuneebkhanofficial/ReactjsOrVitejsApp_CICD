@@ -6,8 +6,14 @@ name: CI — Vite React
 on:
   push:
     branches: [main, dev]
+    paths-ignore:
+      - '**.md'          # Ignore README and other markdown files
+      - '.gitignore'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
 
 # ──────────────────────────────────────────────────────────
 # CONCURRENCY: If a new push arrives while this workflow is
