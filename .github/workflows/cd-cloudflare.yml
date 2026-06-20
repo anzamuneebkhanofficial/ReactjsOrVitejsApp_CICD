@@ -26,6 +26,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: 'your-cloudflare-project-name' # CHANGE THIS to match the name you created in setup
+          projectName: 'reactjsorvitejsappcicd' # CHANGE THIS to match the name you created in setup
           directory: 'dist'
           branch: main
