@@ -1,0 +1,43 @@
+name: CD — Vercel (Vite React)
+
+on:
+  push:
+    branches: [main]
+    # ONLY deploy when code is pushed to main
+    # Not on dev, not on feature branches
+    # Only production-ready code gets deployed
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Vercel
+    runs-on: ubuntu-latest
+    environment: production
+    # Links to GitHub Environment "production"
+    # Go to: Repo → Settings → Environments → New → "production"
+    # Optional: add required reviewers here
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
+        # npx vercel = run Vercel CLI without installing globally
+        # --prod = deploy to PRODUCTION domain (not preview URL)
+        # --token = authenticate with Vercel API
+        # ${{ secrets.VERCEL_TOKEN }} = reads your secret (shows as *** in logs)
+        #
+        # What Vercel does when it receives this:
+        #   1. Receives your code
+        #   2. Runs pnpm install
+        #   3. Runs pnpm build (your script)
+        #   4. Takes the /dist folder
+        #   5. Deploys to their global CDN (200+ edge locations)
+        #   6. Your app is live at your-app.vercel.app
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          # These two tell Vercel CLI: which project to deploy to
+          # Without them: CLI asks interactively → fails in CI (no human)

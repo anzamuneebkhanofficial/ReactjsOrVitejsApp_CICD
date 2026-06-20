@@ -1,0 +1,51 @@
+services:
+  # ===================================================================
+  # 1. VITE FRONTEND — Development (hot-reload)
+  # ===================================================================
+  frontend_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development          # Only build up to the 'development' stage
+    container_name: vite_frontend_dev
+    ports:
+      - "5173:5173"                # Vite default port
+    volumes:
+      - .:/app                     # Mount source for hot-reload
+      - /app/node_modules          # Protect container's node_modules
+    env_file:
+      - .env                       # Load local environment variables
+    environment:
+      # ---------------------------------------------------------------
+      # FIX FOR WINDOWS HOT-RELOAD:
+      # On Windows, Docker runs inside WSL2. File change events (inotify)
+      # from the Windows host DO NOT reach the Linux container.
+      # Polling makes Vite actively check for changes.
+      # ---------------------------------------------------------------
+      - VITE_USE_POLLING=true
+    restart: unless-stopped
+
+  # ===================================================================
+  # 2. VITE FRONTEND — Production (Nginx)
+  # ===================================================================
+  frontend_prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production           # Full multi-stage build → Nginx server
+    container_name: vite_frontend_prod
+    ports:
+      - "8080:80"                  # Expose Nginx on port 8080 of host
+    env_file:
+      - .env
+    restart: unless-stopped
+    profiles:
+      - production                 # Only starts with: docker compose --profile production up
+
+# =====================================================================
+# NETWORKS
+# =====================================================================
+networks:
+  default:
+    name: vite_network
+    driver: bridge
